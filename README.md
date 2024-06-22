@@ -4,6 +4,7 @@ This repository contains a Solana smart contract developed using Anchor, a frame
 
 ## Features
 
+- Dual Token Support: Compatible with both SPL Token and Token2022 standards.
 - Token Vesting: Tokens are locked and vested to a beneficiary over a defined period following a cliff period, during which no tokens are vested.
 - Cliff Period: A specific duration at the beginning of the vesting schedule during which no tokens can be claimed, even though they accumulate towards vesting.
 - Vesting Schedule: After the cliff has expired, tokens begin to vest linearly over the remaining duration until the end time is reached.
