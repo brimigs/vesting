@@ -1,104 +1,218 @@
 use anchor_lang::prelude::*;
-// use anchor_spl::token::{self, TokenAccount};
-// use spl_token_2022::instruction as token_2022_instruction;
+pub use anchor_spl::associated_token::AssociatedToken;
+pub use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, Transfer};
 
-declare_id!("94L2mJxVu6ZMmHaGsCHRQ65Kk2mea6aTnwWjSdfSsmBC");
+declare_id!("FJMQBnLFuLPTBHAKgYyBdoZ4PAu9f6ewrZbhHAgBt4Rw");
 
 #[program]
-mod solana_vesting {
+mod vesting_contract {
     use super::*;
 
-    // pub fn initialize(ctx: Context<InitVestingAccount>, start_time: u64, cliff_duration: u64, end_time: u64, amount: u64) -> Result<()> {
-    //     let vesting_schedule = &mut ctx.accounts.vesting_schedule;
-    //     vesting_schedule.beneficiary = *ctx.accounts.beneficiary.to_account_info().key;
-    //     vesting_schedule.start_time = start_time;
-    //     vesting_schedule.cliff_duration = cliff_duration;
-    //     vesting_schedule.end_time = end_time;
-    //     vesting_schedule.total_amount = amount;
-    //     vesting_schedule.released_amount = 0;
-    //     Ok(())
-    // }
+    pub fn create_vesting_account(
+        ctx: Context<CreateVestingAccount>,
+        company_name: String,
+    ) -> Result<()> {
+        let vesting_account = &mut ctx.accounts.vesting_account;
+        vesting_account.owner = *ctx.accounts.signer.key;
+        vesting_account.company_name = company_name;
+        vesting_account.bump = ctx.bumps.vesting_account;
 
-    // pub fn claim(ctx: Context<Claim>) -> ProgramResult {
-    //     let vesting_schedule = &mut ctx.accounts.vesting_schedule;
-    //     let now = Clock::get()?.unix_timestamp as u64;
+        let mint_account = ctx.accounts.mint.to_account_info();
+        vesting_account.token_mint = *mint_account.key;
+        vesting_account.token_decimals = mint_account.mint.decimals;
 
-    //     if now < vesting_schedule.start_time + vesting_schedule.cliff_duration {
-    //         return Err(ProgramError::Custom(1)); // Cliff period has not expired
-    //     }
+        Ok(())
+    }
 
-    //     let time_elapsed_since_cliff = now - (vesting_schedule.start_time + vesting_schedule.cliff_duration);
-    //     let total_vesting_duration = vesting_schedule.end_time - (vesting_schedule.start_time + vesting_schedule.cliff_duration);
-    //     let vested_amount = if total_vesting_duration > 0 {
-    //         (vesting_schedule.amount as u128 * time_elapsed_since_cliff as u128 / total_vesting_duration as u128) as u64
-    //     } else {
-    //         0
-    //     };
-    //     let available_to_claim = vested_amount.saturating_sub(vesting_schedule.claimed);
+    pub fn create_employee_vesting(
+        ctx: Context<CreateEmployeeAccount>,
+        beneficiary: Pubkey,
+        start_time: i64,
+        end_time: i64,
+        total_amount: i64,
+        cliff_time: i64,
+    ) -> Result<()> {
+        let employee_account = &mut ctx.accounts.employee_account;
+        employee_account.beneficiary = beneficiary;
+        employee_account.start_time = start_time;
+        employee_account.end_time = end_time;
+        employee_account.total_amount = total_amount;
+        employee_account.total_withdrawn = 0;
+        employee_account.cliff_time = cliff_time;
+        employee_account.bump = ctx.bumps.employee_account;
+        employee_account.vesting_account = *ctx.accounts.vesting_account.to_account_info().key;
 
-    //     if available_to_claim > 0 {
-    //         // Determine token version and execute transfer
-    //         if ctx.accounts.token_program.key == &spl_token::ID {
-    //             token::transfer(ctx.accounts.into_transfer_context(), available_to_claim)?;
-    //         } else if ctx.accounts.token_program.key == &spl_token_2022::ID {
-    //             let ix = token_2022_instruction::transfer_checked(
-    //                 &ctx.accounts.token_program.key,
-    //                 &ctx.accounts.vesting_token_account.key,
-    //                 &ctx.accounts.beneficiary.key,
-    //                 &ctx.accounts.authority.key,
-    //                 &[&ctx.accounts.authority.key],
-    //                 available_to_claim,
-    //             )?;
-    //             anchor_lang::solana_program::program::invoke(
-    //                 &ix,
-    //                 &[
-    //                     ctx.accounts.token_program.to_account_info(),
-    //                     ctx.accounts.vesting_token_account.to_account_info(),
-    //                     ctx.accounts.beneficiary.to_account_info(),
-    //                     ctx.accounts.authority.to_account_info(),
-    //                 ],
-    //             )?;
-    //         } else {
-    //             return Err(ProgramError::Custom(2)); // Unsupported token program
-    //         }
+        Ok(())
+    }
 
-    //         vesting_schedule.claimed += available_to_claim;
-    //     }
+    pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
+        let employee_account = &mut ctx.accounts.employee_account;
+        let now = Clock::get()?.unix_timestamp;
 
-    //     Ok(())
-    // }
+        // Check if the current time is before the cliff time
+        if now < employee_account.cliff_time {
+            return Err(ErrorCode::ClaimNotAvailableYet.into());
+        }
+
+        // Calculate the vested amount
+        let time_since_start = now.saturating_sub(employee_account.start_time);
+        let total_vesting_time = employee_account
+            .end_time
+            .saturating_sub(employee_account.start_time);
+        let vested_amount = if now >= employee_account.end_time {
+            employee_account.total_amount
+        } else {
+            employee_account.total_amount * (time_since_start) / (total_vesting_time)
+        };
+
+        //Calculate the amount that can be withdrawn
+        let claimable_amount = vested_amount.saturating_sub(employee_account.total_withdrawn);
+
+        // Check if there is anything left to claim
+        if claimable_amount == 0 {
+            return Err(ErrorCode::NothingToClaim.into());
+        }
+
+        let transfer_cpi_accounts = TransferChecked {
+            from: ctx.accounts.treasury_token_account.to_account_info(),
+            mint: ctx.accounts.vesting_account.mint,
+            to: ctx.accounts.employee_token_account.to_account_info(),
+            authority: ctx.accounts.treasury_token_account.to_account_info(),
+        };
+
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_context = CpiContext::new(cpi_program, transfer_cpi_accounts);
+        let decimals = ctx.accounts.vesting_account.token_decimals;  
+
+        token_interface::transfer_checked(cpi_context, claimable_amount, decimals)?;
+        
+        employee_account.total_withdrawn += claimable_amount;
+
+        Ok(())
+    }
 }
 
-// #[derive(Accounts)]
-// pub struct InitVestingAccount<'info> {
-//     #[account(init, payer = payer, space = 8 + 32 + 8 + 8 + 8 + 8 + 8)]
-//     pub vesting_schedule: Account<'info, VestingSchedule>,
-//     #[account(mut)]
-//     pub payer: Signer<'info>,
-//     pub system_program: Program<'info, System>,
-//     /// CHECK: this is safe 
-//     pub beneficiary: AccountInfo<'info>,
-// }
+#[derive(Accounts)]
+#[instruction(beneficiary: Pubkey)]
+pub struct CreateEmployeeAccount<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
 
-// #[derive(Accounts)]
-// pub struct Claim<'info> {
-//     #[account(mut)]
-//     pub vesting_schedule: Account<'info, VestingSchedule>,
-//     #[account(mut)]
-//     pub beneficiary: TokenAccount,
-//     #[account(signer)]
-//     pub authority: AccountInfo<'info>,
-//     pub token_program: AccountInfo<'info>,
-//     #[account(mut)]
-//     pub vesting_token_account: TokenAccount,
-// }
+    #[account(
+        init,
+        constraint = vesting_account.owner == *signer.key,
+        space = 8 + EmployeeAccount::INIT_SPACE,
+        payer = signer,
+        seeds = [b"employee_vesting".as_ref(), beneficiary.as_ref(), vesting_account.to_account_info().key.as_ref()],
+        bump, 
+    )]
+    pub employee_account: Account<'info, EmployeeAccount>,
 
-// #[account]
-// pub struct VestingSchedule {
-//     pub beneficiary: Pubkey,
-//     pub start_time: u64,
-//     pub cliff_duration: u64,
-//     pub end_time: u64,
-//     pub total_amount: u64,
-//     pub released_amount: u64,
-// }
+    pub mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        init,
+        constraint = vesting_account.owner == *signer.key,
+        token::mint = mint, 
+        token::authority = employee_token_account, 
+        payer = signer,
+        seeds = [b"employee_tokens".as_ref(), beneficiary.as_ref(), vesting_account.to_account_info().key.as_ref()],
+        bump, 
+    )]
+    pub employee_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub vesting_account: Account<'info, VestingAccount>,
+}
+
+#[derive(Accounts)]
+#[instruction(company_name: String)]
+pub struct CreateVestingAccount<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(
+        init, 
+        space = 8 + VestingAccount::INIT_SPACE,
+        payer = signer,
+        seeds = [b"vesting_account".as_ref(), company_name.as_ref()],
+        bump,
+    )]
+    pub vesting_account: Account<'info, VestingAccount>,
+
+    pub mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        init,
+        token::mint = mint,
+        token::authority = treasury_token_account,
+        payer = signer,
+        seeds = [b"vesting_treasury".as_ref(), signer.key.as_ref(), company_name.as_ref()],
+        bump,
+    )]
+    pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+#[instruction(beneficiary: Pubkey, company_name: String)]
+pub struct ClaimTokens<'info> {
+    #[account(
+        mut, 
+        constraint = employee_account.beneficiary == *signer.key,
+    )]
+    pub signer: Signer<'info>,
+
+    #[account(
+        mut, 
+        seeds = [b"employee_vesting".as_ref(), beneficiary.as_ref(), vesting_account.to_account_info().key.as_ref()],
+        bump,
+    )]
+    pub employee_account: Account<'info, EmployeeAccount>,
+    #[account(
+        mut, 
+        seeds = [b"vesting_account".as_ref(), company_name.as_ref()],
+        bump,
+    )]
+    pub vesting_account: Account<'info, VestingAccount>,
+    pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub employee_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct EmployeeAccount {
+    pub beneficiary: Pubkey,
+    pub start_time: i64,
+    pub end_time: i64,
+    pub total_amount: i64,
+    pub total_withdrawn: i64,
+    pub cliff_time: i64,
+    pub vesting_account: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct VestingAccount {
+    pub owner: Pubkey,
+    pub token_mint: Pubkey,
+    pub token_decimals: u8,
+    #[max_len(50)]
+    pub company_name: String,
+    pub bump: u8,
+}
+
+#[error_code]
+pub enum ErrorCode {
+    #[msg("Claiming is not available yet.")]
+    ClaimNotAvailableYet,
+    #[msg("There is nothing to claim.")]
+    NothingToClaim,
+}
