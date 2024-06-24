@@ -1,7 +1,6 @@
 'use client';
 
-import { getCounterProgram, getCounterProgramId } from '@vesting/anchor';
-import { Program } from '@coral-xyz/anchor';
+import { getVestingProgram, getVestingProgramId } from '@vesting/anchor';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { Cluster, Keypair, PublicKey } from '@solana/web3.js';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -17,10 +16,10 @@ export function useCounterProgram() {
   const transactionToast = useTransactionToast();
   const provider = useAnchorProvider();
   const programId = useMemo(
-    () => getCounterProgramId(cluster.network as Cluster),
+    () => getVestingProgramId(cluster.network as Cluster),
     [cluster]
   );
-  const program = getCounterProgram(provider);
+  const program = getVestingProgram(provider);
 
   const accounts = useQuery({
     queryKey: ['counter', 'all', { cluster }],
