@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 pub use anchor_spl::associated_token::AssociatedToken;
-pub use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, Transfer};
+pub use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
 declare_id!("FJMQBnLFuLPTBHAKgYyBdoZ4PAu9f6ewrZbhHAgBt4Rw");
 
@@ -19,7 +19,7 @@ mod vesting_contract {
 
         let mint_account = ctx.accounts.mint.to_account_info();
         vesting_account.token_mint = *mint_account.key;
-        vesting_account.token_decimals = mint_account.mint.decimals;
+        vesting_account.token_decimals = ctx.accounts.mint.decimals;
 
         Ok(())
     }
@@ -75,17 +75,17 @@ mod vesting_contract {
 
         let transfer_cpi_accounts = TransferChecked {
             from: ctx.accounts.treasury_token_account.to_account_info(),
-            mint: ctx.accounts.vesting_account.mint,
+            mint: ctx.accounts.mint.to_account_info(),
             to: ctx.accounts.employee_token_account.to_account_info(),
             authority: ctx.accounts.treasury_token_account.to_account_info(),
         };
 
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_context = CpiContext::new(cpi_program, transfer_cpi_accounts);
-        let decimals = ctx.accounts.vesting_account.token_decimals;  
+        let decimals = ctx.accounts.vesting_account.token_decimals;
 
-        token_interface::transfer_checked(cpi_context, claimable_amount, decimals)?;
-        
+        token_interface::transfer_checked(cpi_context, claimable_amount as u64, decimals)?;
+
         employee_account.total_withdrawn += claimable_amount;
 
         Ok(())
@@ -165,7 +165,7 @@ pub struct ClaimTokens<'info> {
         constraint = employee_account.beneficiary == *signer.key,
     )]
     pub signer: Signer<'info>,
-
+    pub mint: InterfaceAccount<'info, Mint>,
     #[account(
         mut, 
         seeds = [b"employee_vesting".as_ref(), beneficiary.as_ref(), vesting_account.to_account_info().key.as_ref()],
@@ -174,11 +174,19 @@ pub struct ClaimTokens<'info> {
     pub employee_account: Account<'info, EmployeeAccount>,
     #[account(
         mut, 
+        constraint = employee_account.beneficiary == *signer.key,
         seeds = [b"vesting_account".as_ref(), company_name.as_ref()],
         bump,
     )]
     pub vesting_account: Account<'info, VestingAccount>,
     pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut, 
+        constraint = employee_account.beneficiary == *signer.key,
+        seeds = [b"employee_tokens".as_ref(), beneficiary.as_ref(), vesting_account.to_account_info().key.as_ref()],
+        bump,
+    )]
     pub employee_token_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
