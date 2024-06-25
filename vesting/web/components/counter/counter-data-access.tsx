@@ -2,15 +2,38 @@
 
 import { getVestingProgram, getVestingProgramId } from '@vesting/anchor';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { Cluster, Keypair, PublicKey } from '@solana/web3.js';
+import { Cluster, PublicKey } from '@solana/web3.js';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useCluster } from '../cluster/cluster-data-access';
 import { useAnchorProvider } from '../solana/solana-provider';
 import { useTransactionToast } from '../ui/ui-layout';
+import { token } from '@coral-xyz/anchor/dist/cjs/utils';
+import { BN } from '@coral-xyz/anchor';
 
-export function useCounterProgram() {
+interface CreateVestingArgs {
+  company_name: string;
+  token_mint_address: string;
+  signer: PublicKey;
+}
+
+interface CreateExmployeeAccountArgs {
+  company_name: string;
+  beneficiary: PublicKey;
+  start_time: BN;
+  end_time: BN;
+  total_amount: BN;
+  cliff_time: BN;
+}
+
+interface ClaimTokensArgs {
+  beneficiary: PublicKey;
+  token_mint_address: PublicKey;
+  company_name: string;
+}
+
+export function useVestingProgram() {
   const { connection } = useConnection();
   const { cluster } = useCluster();
   const transactionToast = useTransactionToast();
@@ -23,7 +46,7 @@ export function useCounterProgram() {
 
   const accounts = useQuery({
     queryKey: ['counter', 'all', { cluster }],
-    queryFn: () => program.account.counter.all(),
+    queryFn: () => program.account.vestingAccount.all(),
   });
 
   const getProgramAccount = useQuery({
@@ -31,19 +54,100 @@ export function useCounterProgram() {
     queryFn: () => connection.getParsedAccountInfo(programId),
   });
 
-  const initialize = useMutation({
-    mutationKey: ['counter', 'initialize', { cluster }],
-    mutationFn: (keypair: Keypair) =>
-      program.methods
-        .initialize()
-        .accounts({ counter: keypair.publicKey })
-        .signers([keypair])
-        .rpc(),
+  const createVestingAccount = useMutation<string, Error, CreateVestingArgs>({
+    mutationKey: ['vesting-account', 'create', { cluster }],
+    mutationFn: async ({ company_name, token_mint_address, signer }) => {
+      const [vestingAccountAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from(company_name)],
+        programId
+      );
+
+      const [treasuryAccountAddress] = await PublicKey.findProgramAddress(
+        [
+          Buffer.from('vesting_treasury'),
+          signer.toBuffer(),
+          Buffer.from(company_name),
+        ],
+        programId
+      );
+
+      return program.methods
+        .createVestingAccount(company_name)
+        .accounts({
+          vestingAccount: vestingAccountAddress,
+          mint: token_mint_address,
+          treasury: treasuryAccountAddress,
+          tokenProgram: token.TOKEN_PROGRAM_ID,
+          associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
+        })
+        .rpc();
+    },
     onSuccess: (signature) => {
       transactionToast(signature);
-      return accounts.refetch();
+      accounts.refetch();
     },
-    onError: () => toast.error('Failed to initialize account'),
+    onError: (error) => {
+      toast.error(`Failed to create journal entry: ${error.message}`);
+    },
+  });
+
+  const createEmployeeAccount = useMutation<
+    string,
+    Error,
+    CreateExmployeeAccountArgs
+  >({
+    mutationKey: ['vesting-account', 'create', { cluster }],
+    mutationFn: async ({
+      company_name,
+      beneficiary,
+      start_time,
+      end_time,
+      total_amount,
+      cliff_time,
+    }) => {
+      const [vestingAccountAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from(company_name)],
+        programId
+      );
+
+      const [employeeAccountAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from('employee_vesting'), beneficiary.toBuffer()],
+        programId
+      );
+
+      const [employeeTokenAccount] = await PublicKey.findProgramAddress(
+        [
+          Buffer.from('employee_tokens'),
+          beneficiary.toBuffer(),
+          vestingAccountAddress.toBuffer(),
+        ],
+        programId
+      );
+
+      return program.methods
+        .createEmployeeVesting(
+          beneficiary,
+          start_time,
+          end_time,
+          total_amount,
+          cliff_time
+        )
+        .accounts({
+          vestingAccount: vestingAccountAddress,
+          employeeAccount: employeeAccountAddress,
+          employeeTokenAccount: employeeTokenAccount,
+          tokenProgram: token.TOKEN_PROGRAM_ID,
+          associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
+        })
+        .rpc();
+    },
+    onSuccess: (signature) => {
+      transactionToast(signature);
+      accounts.refetch();
+    },
+    onError: (error) => {
+      toast.error(`Failed to create journal entry: ${error.message}`);
+    },
   });
 
   return {
@@ -51,65 +155,65 @@ export function useCounterProgram() {
     programId,
     accounts,
     getProgramAccount,
-    initialize,
+    createVestingAccount,
+    createEmployeeAccount,
   };
 }
 
 export function useCounterProgramAccount({ account }: { account: PublicKey }) {
   const { cluster } = useCluster();
   const transactionToast = useTransactionToast();
-  const { program, accounts } = useCounterProgram();
+  const { program, accounts } = useVestingProgram();
 
   const accountQuery = useQuery({
     queryKey: ['counter', 'fetch', { cluster, account }],
-    queryFn: () => program.account.counter.fetch(account),
+    queryFn: () => program.account.employeeAccount.fetch(account),
   });
 
-  const closeMutation = useMutation({
-    mutationKey: ['counter', 'close', { cluster, account }],
-    mutationFn: () =>
-      program.methods.close().accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accounts.refetch();
+  const claimMutation = useMutation<string, Error, ClaimTokensArgs>({
+    mutationKey: ['employee', 'claim', { cluster }],
+    mutationFn: async ({ company_name, beneficiary, token_mint_address }) => {
+      const [vestingAccountAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from(company_name)],
+        programId
+      );
+
+      const [employeeAccountAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from('employee_vesting'), beneficiary.toBuffer()],
+        programId
+      );
+
+      const [employeeTokenAccount] = await PublicKey.findProgramAddress(
+        [
+          Buffer.from('employee_tokens'),
+          beneficiary.toBuffer(),
+          vestingAccountAddress.toBuffer(),
+        ],
+        programId
+      );
+
+      return program.methods
+        .claimTokens()
+        .accounts({
+          vestingAccount: vestingAccountAddress,
+          employeeAccount: employeeAccountAddress,
+          employeeTokenAccount: employeeTokenAccount,
+          tokenProgram: token.TOKEN_PROGRAM_ID,
+          associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
+        })
+        .rpc();
     },
-  });
-
-  const decrementMutation = useMutation({
-    mutationKey: ['counter', 'decrement', { cluster, account }],
-    mutationFn: () =>
-      program.methods.decrement().accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accountQuery.refetch();
+    onSuccess: (signature) => {
+      transactionToast(signature);
+      accounts.refetch();
     },
-  });
-
-  const incrementMutation = useMutation({
-    mutationKey: ['counter', 'increment', { cluster, account }],
-    mutationFn: () =>
-      program.methods.increment().accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accountQuery.refetch();
-    },
-  });
-
-  const setMutation = useMutation({
-    mutationKey: ['counter', 'set', { cluster, account }],
-    mutationFn: (value: number) =>
-      program.methods.set(value).accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accountQuery.refetch();
+    onError: (error) => {
+      toast.error(`Failed to create journal entry: ${error.message}`);
     },
   });
 
   return {
     accountQuery,
-    closeMutation,
-    decrementMutation,
-    incrementMutation,
-    setMutation,
+    claimMutation,
   };
 }

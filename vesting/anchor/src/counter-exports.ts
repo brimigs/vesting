@@ -1,11 +1,11 @@
 // Here we export some useful types and functions for interacting with the Anchor program.
 import { AnchorProvider, Program } from '@coral-xyz/anchor';
 import { Cluster, PublicKey } from '@solana/web3.js';
-import VestingIDL from '../target/idl/vesting.json';
-import type { Vesting } from '../target/types/vesting';
+import VestingIDL from '../target/idl/vesting_contract.json';
+import type { VestingContract } from '../target/types/vesting_contract';
 
 // Re-export the generated IDL and type
-export { Vesting, VestingIDL };
+export { VestingContract, VestingIDL };
 
 // The programId is imported from the program IDL.
 export const COUNTER_PROGRAM_ID = new PublicKey(
@@ -14,7 +14,7 @@ export const COUNTER_PROGRAM_ID = new PublicKey(
 
 // This is a helper function to get the Counter Anchor program.
 export function getVestingProgram(provider: AnchorProvider) {
-  return new Program(VestingIDL as Vesting, provider);
+  return new Program(VestingIDL as VestingContract, provider);
 }
 
 // This is a helper function to get the program ID for the Counter program depending on the cluster.

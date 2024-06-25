@@ -45,7 +45,7 @@ mod vesting_contract {
         Ok(())
     }
 
-    pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
+    pub fn claim_tokens(ctx: Context<ClaimTokens>, _beneficiary: Pubkey, _company_name: string) -> Result<()> {
         let employee_account = &mut ctx.accounts.employee_account;
         let now = Clock::get()?.unix_timestamp;
 
@@ -136,7 +136,7 @@ pub struct CreateVestingAccount<'info> {
         init, 
         space = 8 + VestingAccount::INIT_SPACE,
         payer = signer,
-        seeds = [b"vesting_account".as_ref(), company_name.as_ref()],
+        seeds = [company_name.as_ref()],
         bump,
     )]
     pub vesting_account: Account<'info, VestingAccount>,
