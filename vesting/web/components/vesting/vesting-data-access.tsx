@@ -13,24 +13,25 @@ import { token } from '@coral-xyz/anchor/dist/cjs/utils';
 import { BN } from '@coral-xyz/anchor';
 
 interface CreateVestingArgs {
-  company_name: string;
-  token_mint_address: string;
+  companyName: string;
+  tokenMintAddress: string;
   signer: PublicKey;
 }
 
-interface CreateExmployeeAccountArgs {
-  company_name: string;
+interface CreateEmployeeAccountArgs {
+  companyName: string;
+  tokenMintAddress: string;
   beneficiary: PublicKey;
-  start_time: BN;
-  end_time: BN;
-  total_amount: BN;
-  cliff_time: BN;
+  startTime: BN;
+  endTime: BN;
+  totalAmount: BN;
+  cliffTime: BN;
 }
 
 interface ClaimTokensArgs {
   beneficiary: PublicKey;
-  token_mint_address: PublicKey;
-  company_name: string;
+  tokenMintAddress: PublicKey;
+  companyName: string;
 }
 
 export function useVestingProgram() {
@@ -45,8 +46,8 @@ export function useVestingProgram() {
   const program = getVestingProgram(provider);
 
   const accounts = useQuery({
-    queryKey: ['counter', 'all', { cluster }],
-    queryFn: () => program.account.vestingAccount.all(),
+    queryKey: ['vesting-account', 'all', { cluster }],
+    queryFn: () => program.account.vestingAccount.all,
   });
 
   const getProgramAccount = useQuery({
@@ -56,30 +57,27 @@ export function useVestingProgram() {
 
   const createVestingAccount = useMutation<string, Error, CreateVestingArgs>({
     mutationKey: ['vesting-account', 'create', { cluster }],
-    mutationFn: async ({ company_name, token_mint_address, signer }) => {
-      const [vestingAccountAddress] = await PublicKey.findProgramAddress(
-        [Buffer.from(company_name)],
+    mutationFn: async ({ companyName, tokenMintAddress }) => {
+      const [vestingAccountAddress] = PublicKey.findProgramAddressSync(
+        [Buffer.from(companyName)],
         programId
       );
 
-      const [treasuryAccountAddress] = await PublicKey.findProgramAddress(
-        [
-          Buffer.from('vesting_treasury'),
-          signer.toBuffer(),
-          Buffer.from(company_name),
-        ],
+      const [treasuryAccountAddress] = PublicKey.findProgramAddressSync(
+        [Buffer.from('vesting_treasury'), Buffer.from(companyName)],
         programId
       );
+
+      const vestingAccounts = {
+        vestingAccount: vestingAccountAddress,
+        treasuryAccount: treasuryAccountAddress,
+        mint: new PublicKey(tokenMintAddress),
+        tokenProgram: token.TOKEN_PROGRAM_ID,
+      };
 
       return program.methods
-        .createVestingAccount(company_name)
-        .accounts({
-          vestingAccount: vestingAccountAddress,
-          mint: token_mint_address,
-          treasury: treasuryAccountAddress,
-          tokenProgram: token.TOKEN_PROGRAM_ID,
-          associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
-        })
+        .createVestingAccount(companyName)
+        .accounts(vestingAccounts)
         .rpc();
     },
     onSuccess: (signature) => {
@@ -94,28 +92,29 @@ export function useVestingProgram() {
   const createEmployeeAccount = useMutation<
     string,
     Error,
-    CreateExmployeeAccountArgs
+    CreateEmployeeAccountArgs
   >({
     mutationKey: ['vesting-account', 'create', { cluster }],
     mutationFn: async ({
-      company_name,
+      companyName,
       beneficiary,
-      start_time,
-      end_time,
-      total_amount,
-      cliff_time,
+      startTime,
+      endTime,
+      totalAmount,
+      cliffTime,
+      tokenMintAddress,
     }) => {
-      const [vestingAccountAddress] = await PublicKey.findProgramAddress(
-        [Buffer.from(company_name)],
+      const [vestingAccountAddress] = PublicKey.findProgramAddressSync(
+        [Buffer.from(companyName)],
         programId
       );
 
-      const [employeeAccountAddress] = await PublicKey.findProgramAddress(
+      const [employeeAccountAddress] = PublicKey.findProgramAddressSync(
         [Buffer.from('employee_vesting'), beneficiary.toBuffer()],
         programId
       );
 
-      const [employeeTokenAccount] = await PublicKey.findProgramAddress(
+      const [employeeTokenAccount] = PublicKey.findProgramAddressSync(
         [
           Buffer.from('employee_tokens'),
           beneficiary.toBuffer(),
@@ -124,21 +123,24 @@ export function useVestingProgram() {
         programId
       );
 
+      const employeeAccounts = {
+        employeeAccount: employeeAccountAddress,
+        mint: new PublicKey(tokenMintAddress),
+        employeeTokenAccount: employeeTokenAccount,
+        tokenProgram: token.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
+        vestingAccount: vestingAccountAddress,
+      };
+
       return program.methods
         .createEmployeeVesting(
           beneficiary,
-          start_time,
-          end_time,
-          total_amount,
-          cliff_time
+          startTime,
+          endTime,
+          totalAmount,
+          cliffTime
         )
-        .accounts({
-          vestingAccount: vestingAccountAddress,
-          employeeAccount: employeeAccountAddress,
-          employeeTokenAccount: employeeTokenAccount,
-          tokenProgram: token.TOKEN_PROGRAM_ID,
-          associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
-        })
+        .accounts(employeeAccounts)
         .rpc();
     },
     onSuccess: (signature) => {
@@ -160,30 +162,34 @@ export function useVestingProgram() {
   };
 }
 
-export function useCounterProgramAccount({ account }: { account: PublicKey }) {
+export function useEmployeeAccount({
+  beneficiary,
+}: {
+  beneficiary: PublicKey;
+}) {
   const { cluster } = useCluster();
   const transactionToast = useTransactionToast();
-  const { program, accounts } = useVestingProgram();
+  const { program, accounts, programId } = useVestingProgram();
 
   const accountQuery = useQuery({
-    queryKey: ['counter', 'fetch', { cluster, account }],
-    queryFn: () => program.account.employeeAccount.fetch(account),
+    queryKey: ['employee', 'fetch', { cluster, beneficiary }],
+    queryFn: () => program.account.employeeAccount.fetch(beneficiary),
   });
 
   const claimMutation = useMutation<string, Error, ClaimTokensArgs>({
     mutationKey: ['employee', 'claim', { cluster }],
-    mutationFn: async ({ company_name, beneficiary, token_mint_address }) => {
-      const [vestingAccountAddress] = await PublicKey.findProgramAddress(
-        [Buffer.from(company_name)],
+    mutationFn: async ({ companyName, beneficiary, tokenMintAddress }) => {
+      const [vestingAccountAddress] = PublicKey.findProgramAddressSync(
+        [Buffer.from(companyName)],
         programId
       );
 
-      const [employeeAccountAddress] = await PublicKey.findProgramAddress(
+      const [employeeAccountAddress] = PublicKey.findProgramAddressSync(
         [Buffer.from('employee_vesting'), beneficiary.toBuffer()],
         programId
       );
 
-      const [employeeTokenAccount] = await PublicKey.findProgramAddress(
+      const [employeeTokenAccount] = PublicKey.findProgramAddressSync(
         [
           Buffer.from('employee_tokens'),
           beneficiary.toBuffer(),
@@ -192,16 +198,22 @@ export function useCounterProgramAccount({ account }: { account: PublicKey }) {
         programId
       );
 
-      return program.methods
-        .claimTokens()
-        .accounts({
-          vestingAccount: vestingAccountAddress,
-          employeeAccount: employeeAccountAddress,
-          employeeTokenAccount: employeeTokenAccount,
-          tokenProgram: token.TOKEN_PROGRAM_ID,
-          associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
-        })
-        .rpc();
+      const [treasuryAccountAddress] = PublicKey.findProgramAddressSync(
+        [Buffer.from('vesting_treasury'), Buffer.from(companyName)],
+        programId
+      );
+
+      const claimAccounts = {
+        mint: new PublicKey(tokenMintAddress),
+        employeeAccount: employeeAccountAddress,
+        vestingAccount: vestingAccountAddress,
+        treasuryTokenAccount: treasuryAccountAddress,
+        employeeTokenAccount: employeeTokenAccount,
+        tokenProgram: token.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
+      };
+
+      return program.methods.claimTokens().accounts(claimAccounts).rpc();
     },
     onSuccess: (signature) => {
       transactionToast(signature);

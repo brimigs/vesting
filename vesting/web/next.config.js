@@ -8,6 +8,8 @@ const { composePlugins, withNx } = require('@nx/next');
  **/
 const nextConfig = {
   webpack: (config) => {
+    config.resolve.fallback = { fs: false };
+
     config.externals = [
       ...(config.externals || []),
       'bigint',

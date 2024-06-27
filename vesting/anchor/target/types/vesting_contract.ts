@@ -348,10 +348,6 @@ export type VestingContract = {
                 ]
               },
               {
-                "kind": "account",
-                "path": "signer"
-              },
-              {
                 "kind": "arg",
                 "path": "companyName"
               }

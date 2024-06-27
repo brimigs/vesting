@@ -342,10 +342,6 @@
                 ]
               },
               {
-                "kind": "account",
-                "path": "signer"
-              },
-              {
                 "kind": "arg",
                 "path": "company_name"
               }
