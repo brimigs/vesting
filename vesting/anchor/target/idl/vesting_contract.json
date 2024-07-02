@@ -1,5 +1,5 @@
 {
-  "address": "FJMQBnLFuLPTBHAKgYyBdoZ4PAu9f6ewrZbhHAgBt4Rw",
+  "address": "7AGmMcgd1SjoMsCcXAAYwRgB9ihCyM8cZqjsUqriNRQt",
   "metadata": {
     "name": "vesting_contract",
     "version": "0.1.0",
@@ -71,6 +71,18 @@
           "pda": {
             "seeds": [
               {
+                "kind": "arg",
+                "path": "company_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
                 "kind": "const",
                 "value": [
                   118,
@@ -81,13 +93,14 @@
                   110,
                   103,
                   95,
+                  116,
+                  114,
+                  101,
                   97,
-                  99,
-                  99,
-                  111,
+                  115,
                   117,
-                  110,
-                  116
+                  114,
+                  121
                 ]
               },
               {
@@ -96,9 +109,6 @@
               }
             ]
           }
-        },
-        {
-          "name": "treasury_token_account"
         },
         {
           "name": "employee_token_account",
@@ -148,7 +158,16 @@
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "_beneficiary",
+          "type": "pubkey"
+        },
+        {
+          "name": "_company_name",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "create_employee_vesting",

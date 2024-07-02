@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/vesting_contract.json`.
  */
 export type VestingContract = {
-  "address": "FJMQBnLFuLPTBHAKgYyBdoZ4PAu9f6ewrZbhHAgBt4Rw",
+  "address": "7AGmMcgd1SjoMsCcXAAYwRgB9ihCyM8cZqjsUqriNRQt",
   "metadata": {
     "name": "vestingContract",
     "version": "0.1.0",
@@ -77,6 +77,18 @@ export type VestingContract = {
           "pda": {
             "seeds": [
               {
+                "kind": "arg",
+                "path": "companyName"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasuryTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
                 "kind": "const",
                 "value": [
                   118,
@@ -87,13 +99,14 @@ export type VestingContract = {
                   110,
                   103,
                   95,
+                  116,
+                  114,
+                  101,
                   97,
-                  99,
-                  99,
-                  111,
+                  115,
                   117,
-                  110,
-                  116
+                  114,
+                  121
                 ]
               },
               {
@@ -102,9 +115,6 @@ export type VestingContract = {
               }
             ]
           }
-        },
-        {
-          "name": "treasuryTokenAccount"
         },
         {
           "name": "employeeTokenAccount",
@@ -154,7 +164,16 @@ export type VestingContract = {
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "beneficiary",
+          "type": "pubkey"
+        },
+        {
+          "name": "companyName",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "createEmployeeVesting",

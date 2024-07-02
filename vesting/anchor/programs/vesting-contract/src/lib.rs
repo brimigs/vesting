@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 pub use anchor_spl::associated_token::AssociatedToken;
 pub use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
-declare_id!("FJMQBnLFuLPTBHAKgYyBdoZ4PAu9f6ewrZbhHAgBt4Rw");
+declare_id!("7AGmMcgd1SjoMsCcXAAYwRgB9ihCyM8cZqjsUqriNRQt");
 
 #[program]
 mod vesting_contract {
@@ -45,7 +45,11 @@ mod vesting_contract {
         Ok(())
     }
 
-    pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
+    pub fn claim_tokens(
+        ctx: Context<ClaimTokens>,
+        _beneficiary: Pubkey,
+        _company_name: String,
+    ) -> Result<()> {
         let employee_account = &mut ctx.accounts.employee_account;
         let now = Clock::get()?.unix_timestamp;
 
@@ -126,6 +130,7 @@ pub struct CreateEmployeeAccount<'info> {
     pub vesting_account: Account<'info, VestingAccount>,
 }
 
+// FIX ME: Allow multiple vesting accounts for one employee - add to PDA seeds for look up 
 #[derive(Accounts)]
 #[instruction(company_name: String)]
 pub struct CreateVestingAccount<'info> {
@@ -160,10 +165,7 @@ pub struct CreateVestingAccount<'info> {
 #[derive(Accounts)]
 #[instruction(beneficiary: Pubkey, company_name: String)]
 pub struct ClaimTokens<'info> {
-    #[account(
-        mut, 
-        constraint = employee_account.beneficiary == *signer.key,
-    )]
+    #[account(mut,)]
     pub signer: Signer<'info>,
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(
@@ -174,16 +176,19 @@ pub struct ClaimTokens<'info> {
     pub employee_account: Account<'info, EmployeeAccount>,
     #[account(
         mut, 
-        constraint = employee_account.beneficiary == *signer.key,
-        seeds = [b"vesting_account".as_ref(), company_name.as_ref()],
+        seeds = [company_name.as_ref()],
         bump,
     )]
     pub vesting_account: Account<'info, VestingAccount>,
+    #[account(
+        mut, 
+        seeds = [b"vesting_treasury".as_ref(), company_name.as_ref()],
+        bump,
+    )]
     pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         mut, 
-        constraint = employee_account.beneficiary == *signer.key,
         seeds = [b"employee_tokens".as_ref(), beneficiary.as_ref(), vesting_account.to_account_info().key.as_ref()],
         bump,
     )]
@@ -193,6 +198,8 @@ pub struct ClaimTokens<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
+// FIX ME: Add vesting account controller 
+// FIX ME: Add mint addr check 
 #[account]
 #[derive(InitSpace)]
 pub struct EmployeeAccount {
@@ -204,6 +211,7 @@ pub struct EmployeeAccount {
     pub cliff_time: i64,
     pub vesting_account: Pubkey,
     pub bump: u8,
+    pub mint: Pubkey,
 }
 
 #[account]

@@ -16,16 +16,20 @@ interface CreateVestingArgs {
   companyName: string;
   tokenMintAddress: string;
   signer: PublicKey;
+  tokenProgram: PublicKey;
 }
 
 interface CreateEmployeeAccountArgs {
   companyName: string;
-  tokenMintAddress: string;
+  tokenMintAddress: PublicKey;
   beneficiary: PublicKey;
   startTime: BN;
   endTime: BN;
   totalAmount: BN;
   cliffTime: BN;
+  signer: PublicKey;
+  tokenProgram: PublicKey;
+  vestingAccount: PublicKey;
 }
 
 interface ClaimTokensArgs {
@@ -57,27 +61,19 @@ export function useVestingProgram() {
 
   const createVestingAccount = useMutation<string, Error, CreateVestingArgs>({
     mutationKey: ['vesting-account', 'create', { cluster }],
-    mutationFn: async ({ companyName, tokenMintAddress }) => {
-      const [vestingAccountAddress] = PublicKey.findProgramAddressSync(
-        [Buffer.from(companyName)],
-        programId
-      );
-
-      const [treasuryAccountAddress] = PublicKey.findProgramAddressSync(
-        [Buffer.from('vesting_treasury'), Buffer.from(companyName)],
-        programId
-      );
-
-      const vestingAccounts = {
-        vestingAccount: vestingAccountAddress,
-        treasuryAccount: treasuryAccountAddress,
-        mint: new PublicKey(tokenMintAddress),
-        tokenProgram: token.TOKEN_PROGRAM_ID,
-      };
-
+    mutationFn: async ({
+      companyName,
+      tokenMintAddress,
+      tokenProgram,
+      signer,
+    }) => {
       return program.methods
         .createVestingAccount(companyName)
-        .accounts(vestingAccounts)
+        .accounts({
+          signer,
+          mint: tokenMintAddress,
+          tokenProgram,
+        })
         .rpc();
     },
     onSuccess: (signature) => {
@@ -85,7 +81,7 @@ export function useVestingProgram() {
       accounts.refetch();
     },
     onError: (error) => {
-      toast.error(`Failed to create journal entry: ${error.message}`);
+      toast.error(`Failed to create vesting program: ${error.message}`);
     },
   });
 
@@ -103,35 +99,10 @@ export function useVestingProgram() {
       totalAmount,
       cliffTime,
       tokenMintAddress,
+      signer,
+      tokenProgram,
+      vestingAccount,
     }) => {
-      const [vestingAccountAddress] = PublicKey.findProgramAddressSync(
-        [Buffer.from(companyName)],
-        programId
-      );
-
-      const [employeeAccountAddress] = PublicKey.findProgramAddressSync(
-        [Buffer.from('employee_vesting'), beneficiary.toBuffer()],
-        programId
-      );
-
-      const [employeeTokenAccount] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from('employee_tokens'),
-          beneficiary.toBuffer(),
-          vestingAccountAddress.toBuffer(),
-        ],
-        programId
-      );
-
-      const employeeAccounts = {
-        employeeAccount: employeeAccountAddress,
-        mint: new PublicKey(tokenMintAddress),
-        employeeTokenAccount: employeeTokenAccount,
-        tokenProgram: token.TOKEN_PROGRAM_ID,
-        associatedTokenProgram: token.ASSOCIATED_PROGRAM_ID,
-        vestingAccount: vestingAccountAddress,
-      };
-
       return program.methods
         .createEmployeeVesting(
           beneficiary,
@@ -140,7 +111,12 @@ export function useVestingProgram() {
           totalAmount,
           cliffTime
         )
-        .accounts(employeeAccounts)
+        .accounts({
+          signer,
+          mint: tokenMintAddress,
+          tokenProgram: tokenProgram,
+          vestingAccount,
+        })
         .rpc();
     },
     onSuccess: (signature) => {
@@ -148,7 +124,7 @@ export function useVestingProgram() {
       accounts.refetch();
     },
     onError: (error) => {
-      toast.error(`Failed to create journal entry: ${error.message}`);
+      toast.error(`Failed to create vesting program: ${error.message}`);
     },
   });
 
@@ -220,7 +196,7 @@ export function useEmployeeAccount({
       accounts.refetch();
     },
     onError: (error) => {
-      toast.error(`Failed to create journal entry: ${error.message}`);
+      toast.error(`Failed to create vesting: ${error.message}`);
     },
   });
 

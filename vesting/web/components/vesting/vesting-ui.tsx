@@ -50,7 +50,7 @@ export function VestingCreate() {
         onClick={handleSubmit}
         disabled={createVestingAccount.isPending || !isFormValid}
       >
-        Create Journal Entry {createVestingAccount.isPending && '...'}
+        Create Vesting Program {createVestingAccount.isPending && '...'}
       </button>
     </div>
   );

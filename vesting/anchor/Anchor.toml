@@ -1,11 +1,11 @@
 [toolchain]
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
-vesting = "6rZ2ap65hW5Cnp6VQqyjwSEndRGDfmEwWpuQykSVquLp"
+vesting = "8a7mdhUy2pXU7DCcWLsSoQRR18hdZBJgDbWrY2hay23v"
 
 [registry]
 url = "https://api.apr.dev"
