@@ -4,11 +4,12 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletButton } from '../solana/solana-provider';
 import { AppHero, ellipsify } from '../ui/ui-layout';
 import { ExplorerLink } from '../cluster/cluster-ui';
-import { useVestingProgram } from './vesting-data-access';
-import { VestingCreate } from './vesting-ui';
+import { useVestingProgram } from './employee-data-access';
+import { EmployeeCreate } from './employee-ui';
 import { useState } from 'react';
+import React from 'react';
 
-export default function VestingFeature() {
+export default function EmployeeFeature() {
   const { publicKey } = useWallet();
   const [companyName, setCompanyName] = useState<string>('');
   const { programId } = useVestingProgram();
@@ -16,12 +17,10 @@ export default function VestingFeature() {
   return publicKey ? (
     <div>
       <AppHero
-        title="Company Vesting Account"
-        subtitle={
-          'Create a new vesting account by clicking the "Create" button.'
-        }
+        title={`Your Vesting Accounts`}
+        subtitle={`Accounts associated with: ${publicKey}`}
       >
-        <VestingCreate />
+        <EmployeeCreate />
       </AppHero>
       {/* <CounterList /> */}
     </div>

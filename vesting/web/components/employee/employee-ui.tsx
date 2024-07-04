@@ -4,61 +4,26 @@ import { PublicKey } from '@solana/web3.js';
 import { useMemo, useState } from 'react';
 import { ellipsify } from '../ui/ui-layout';
 import { ExplorerLink } from '../cluster/cluster-ui';
-import { useVestingProgram, useEmployeeAccount } from './vesting-data-access';
+import { useVestingProgram, useEmployeeAccount } from './employee-data-access';
 import { useWallet } from '@solana/wallet-adapter-react';
 
-export function VestingCreate() {
+export function EmployeeCreate() {
   const { createVestingAccount } = useVestingProgram();
   const { publicKey } = useWallet();
-  const [tokenMintAddress, setTokenMintAddress] = useState('');
-  const [companyName, setCompanyName] = useState('');
-
-  const isFormValid = tokenMintAddress.trim() !== '';
-
-  const handleSubmit = () => {
-    if (publicKey && isFormValid) {
-      createVestingAccount.mutateAsync({
-        companyName,
-        tokenMintAddress,
-        signer: publicKey,
-      });
-    }
-  };
 
   if (!publicKey) {
     return <p>Connect your wallet</p>;
   }
 
   return (
-    <div className="flex justify-center pt-10 w-full">
-      <div className="w-3/5 p-8 bg-gray-400 shadow-lg rounded">
-        {' '}
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Company Name"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.toValue)}
-            className="input input-bordered w-full"
-          />
-        </div>
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Token Mint Address"
-            value={tokenMintAddress}
-            onChange={(e) => setTokenMintAddress(e.target.value)}
-            className="input input-bordered w-full"
-          />
-        </div>
-        <button
-          className="btn btn-xs lg:btn-md btn-primary"
-          onClick={handleSubmit}
-          // disabled={createVestingAccount.isPending || !isFormValid}
-        >
-          Create {createVestingAccount.isPending && '...'}
-        </button>
-      </div>
+    <div>
+      <button
+        className="btn btn-xs lg:btn-md btn-primary"
+        // onClick={handleSubmit}
+        disabled={createVestingAccount.isPending}
+      >
+        Claim Tokens{createVestingAccount.isPending && '...'}
+      </button>
     </div>
   );
 }
